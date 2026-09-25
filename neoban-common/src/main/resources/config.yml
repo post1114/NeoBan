@@ -1,0 +1,88 @@
+# NeoBan configuration file
+# All messages are customizable; edit the values below to translate the plugin.
+appeal:
+  # Maximum number of appeals allowed per punishment (or per player lifetime, depending on count-scope)
+  max-appeals: 5
+  # Cooldown between appeals (minutes)
+  cooldown-minutes: 60
+  # Appeal counter scope: PER_PUNISHMENT (count per punishment) / LIFETIME (count for the player's lifetime)
+  count-scope: PER_PUNISHMENT
+  # Commands a banned player may use inside the appeal world
+  allowed-commands:
+    - "/appeal"
+  world:
+    # VOID: plugin generates a void world; CUSTOM: use an existing world (falls back to void if missing)
+    type: VOID
+    void-name: NeoBan_AppealVoid
+    custom-name: appeal_world
+    # Optional custom spawn point when type: CUSTOM (x/y/z must all be provided)
+    custom-spawn:
+      x: 0.5
+      y: 65.0
+      z: 0.5
+
+messages:
+  prefix: "&8[&cNeoBan&8] &7"
+  reason-default: "No reason provided"
+  player-only: "&cThis command can only be used by a player."
+  no-permission: "&cYou don't have permission to do that."
+  self-not-allowed: "&cYou cannot use this on yourself."
+  invalid-duration: "&cInvalid duration format, e.g. 7d / 1d12h / 45m / 30s"
+  target-not-found: "&cPlayer &e{player} &cwas not found."
+  already-banned: "&cThat player is already banned."
+  already-muted: "&cThat player is already muted."
+  usage-ban: "&cUsage: /ban <player> [reason]"
+  usage-tempban: "&cUsage: /tempban <player> <duration> [reason]"
+  usage-unban: "&cUsage: /unban <player>"
+  usage-mute: "&cUsage: /mute <player> [reason]"
+  usage-tempmute: "&cUsage: /tempmute <player> <duration> [reason]"
+  usage-unmute: "&cUsage: /unmute <player>"
+  usage-kick: "&cUsage: /kick <player> [reason]"
+  usage-appeal: "&cUsage: /appeal <reason> or /appeal list|view|accept|deny ..."
+  usage-neoban: "&cUsage: /neoban <reload|info|resetappeals> ..."
+  ban-success: "&aBanned &e{player}&a, duration: &f{duration}&a, reason: &f{reason}"
+  ban-join: "&cYou are banned!&7 Reason: &f{reason}&7 Time left: &f{duration}&7 You can appeal in the appeal world: &f/appeal <reason> (current world: {world})"
+  ban-removed: "&aYour ban has been lifted."
+  ban-expired: "&aYour ban has expired and has been lifted."
+  unban-success: "&aUnbanned &e{player}&a."
+  unban-not-found: "&cThat player has no active ban."
+  mute-success: "&aMuted &e{player}&a, duration: &f{duration}&a, reason: &f{reason}"
+  mute-notify: "&cYou have been muted.&7 Reason: &f{reason}&7 Time left: &f{duration}"
+  mute-blocked: "&cYou are muted, time left: &f{duration}"
+  mute-expired: "&aYour mute has expired and has been lifted."
+  unmute-success: "&aUnmuted &e{player}&a."
+  unmute-notify: "&aYou have been unmuted."
+  unmute-not-found: "&cThat player has no active mute."
+  kick-default: "&cYou have been removed from the server by an administrator."
+  kick-success: "&aKicked &e{player}&a."
+  chat-blocked: "&cChatting is not allowed in the appeal world."
+  command-blocked: "&cOnly these commands are allowed in the appeal world: &f{commands}"
+  appeal-none: "&cYou have no punishment that can be appealed."
+  appeal-pending-exists: "&cYou already have a pending appeal (#&f{id}&c), please wait for a decision."
+  appeal-limit: "&cYou have reached the appeal limit (&f{used}&7/&f{max}&c)."
+  appeal-cooldown: "&cAppeal cooldown active, try again in &f{time}&c."
+  appeal-submitted: "&aAppeal submitted (#&f{id}&a), please wait for an admin to review it."
+  appeal-notify-admin: "&ePlayer &f{player} &esubmitted appeal #&f{id}&e (&f{type}&e): &f{reason}"
+  appeal-accepted-player: "&aYour appeal (#&f{id}&a) was accepted by &f{admin}&a, the punishment has been lifted."
+  appeal-denied-player: "&cYour appeal (#&f{id}&c) was rejected by &f{admin}&c: &f{note}"
+  appeal-accepted-admin: "&aAccepted appeal #&f{id}&a (player &f{player}&a), the punishment has been lifted."
+  appeal-denied-admin: "&cRejected appeal #&f{id}&c (player &f{player}&c)."
+  appeal-not-found: "&cAppeal &f{id} &cdoes not exist."
+  appeal-not-pending: "&cThat appeal has already been decided."
+  appeal-list-header: "&7Pending appeals:"
+  appeal-list-entry: "&e#{id} &f{player} &7[&f{type}&7] &f{reason}"
+  appeal-list-empty: "&7There are no pending appeals."
+  appeal-view-header: "&7Appeal &e#{id} &7status: &f{status}"
+  appeal-view-entry: "&7Player: &f{player} &7Type: &f{type} &7Punishment: &f{punishment} &7Reason: &f{reason} &7Created: &f{created} &7Decision: &f{decided} &7Note: &f{note}"
+  appeal-reset: "&aReset appeal count and cooldown for &f{player}&a."
+  appeal-status-none: "&7You have no punishment that can be appealed."
+  appeal-status-punishment: "&7Current punishment: &f{type} &7Reason: &f{reason} &7Time left: &f{duration}"
+  appeal-status-counts: "&7Appeals used: &f{used}&7/&f{max}&7 ({scope})"
+  appeal-status-cooldown: "&7Appeal cooldown, &f{time} &7remaining"
+  appeal-status-cooldown-none: "&7Appeal cooldown: &fnone"
+  appeal-status-pending: "&7Pending appeal: &f#{id}"
+  reload-success: "&aConfiguration reloaded."
+  info-bans: "&7Active bans: &f{count}"
+  info-mutes: "&7Active mutes: &f{count}"
+  info-appeals: "&7Pending appeals: &f{count}"
+  info-world: "&7Appeal world: &f{world}"

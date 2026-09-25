@@ -1,0 +1,73 @@
+name: NeoBan
+main: com.neoban.modern.NeoBanModern
+version: 1.0.0
+api-version: '1.21'
+description: NeoBan - ban/mute/kick with appeal world for Paper 26.3
+author: NeoBan
+commands:
+  ban:
+    description: Permanently ban a player
+    usage: /ban <player> [reason]
+    permission: neoban.ban
+  tempban:
+    description: Temporarily ban a player
+    usage: /tempban <player> <duration> [reason]
+    permission: neoban.tempban
+  unban:
+    description: Unban a player
+    usage: /unban <player>
+    permission: neoban.unban
+  mute:
+    description: Permanently mute a player
+    usage: /mute <player> [reason]
+    permission: neoban.mute
+  tempmute:
+    description: Temporarily mute a player
+    usage: /tempmute <player> <duration> [reason]
+    permission: neoban.tempmute
+  unmute:
+    description: Unmute a player
+    usage: /unmute <player>
+    permission: neoban.unmute
+  kick:
+    description: Kick a player
+    usage: /kick <player> [reason]
+    permission: neoban.kick
+  appeal:
+    description: Submit or manage appeals
+    usage: /appeal [submit|view|accept|deny|list] ...
+  neoban:
+    description: NeoBan admin commands
+    usage: /neoban <reload|info|resetappeals> ...
+    permission: neoban.admin
+permissions:
+  neoban.ban:
+    description: Allows /ban
+    default: op
+  neoban.tempban:
+    description: Allows /tempban
+    default: op
+  neoban.unban:
+    description: Allows /unban
+    default: op
+  neoban.mute:
+    description: Allows /mute
+    default: op
+  neoban.tempmute:
+    description: Allows /tempmute
+    default: op
+  neoban.unmute:
+    description: Allows /unmute
+    default: op
+  neoban.kick:
+    description: Allows /kick
+    default: op
+  neoban.appeal.admin:
+    description: Allows managing appeals
+    default: op
+  neoban.admin:
+    description: NeoBan admin commands
+    default: op
+  neoban.bypass:
+    description: Bypass appeal world restrictions
+    default: op
