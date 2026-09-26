@@ -1,6 +1,9 @@
 package com.neoban.common.listener;
 
 import com.neoban.common.NeoBanBase;
+import com.neoban.common.model.IpBan;
+import com.neoban.common.util.Durations;
+import com.neoban.common.util.Ips;
 import org.bukkit.Location;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -8,6 +11,7 @@ import org.bukkit.event.EventPriority;
 import org.bukkit.event.Listener;
 import org.bukkit.event.player.PlayerChangedWorldEvent;
 import org.bukkit.event.player.PlayerJoinEvent;
+import org.bukkit.event.player.PlayerLoginEvent;
 import org.bukkit.event.player.PlayerMoveEvent;
 import org.bukkit.event.player.PlayerPortalEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
@@ -20,6 +24,28 @@ public class CoreListener implements Listener {
 
     public CoreListener(NeoBanBase plugin) {
         this.plugin = plugin;
+    }
+
+    @EventHandler(priority = EventPriority.HIGH)
+    public void onLogin(PlayerLoginEvent event) {
+        if (event.getResult() != PlayerLoginEvent.Result.ALLOWED) {
+            return;
+        }
+        String ip = Ips.of(event.getAddress());
+        if (ip == null) {
+            return;
+        }
+        IpBan ban = plugin.ipBanStore().findActive(ip);
+        if (ban == null) {
+            return;
+        }
+        if (event.getPlayer().hasPermission("neoban.ipban.bypass")) {
+            return;
+        }
+        long now = System.currentTimeMillis();
+        String remaining = ban.isPermanent() ? "Permanent" : Durations.format(ban.remaining(now));
+        event.disallow(PlayerLoginEvent.Result.KICK_BANNED,
+                plugin.formatMessage("ipban-join", "reason", ban.getReason(), "duration", remaining));
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

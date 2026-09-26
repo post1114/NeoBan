@@ -1,27 +1,15 @@
 package com.neoban.common.model;
 
-import java.util.UUID;
+public class IpBan {
 
-public class Punishment {
-
-    private final PunishmentType type;
     private int id;
-    private UUID uuid;
-    private String name;
+    private String ip;
     private String issuer;
     private String reason;
     private long created;
     private long expires;
     private boolean active;
-    private String ip;
-
-    public Punishment(PunishmentType type) {
-        this.type = type;
-    }
-
-    public PunishmentType getType() {
-        return type;
-    }
+    private boolean auto;
 
     public int getId() {
         return id;
@@ -31,20 +19,12 @@ public class Punishment {
         this.id = id;
     }
 
-    public UUID getUuid() {
-        return uuid;
+    public String getIp() {
+        return ip;
     }
 
-    public void setUuid(UUID uuid) {
-        this.uuid = uuid;
-    }
-
-    public String getName() {
-        return name;
-    }
-
-    public void setName(String name) {
-        this.name = name;
+    public void setIp(String ip) {
+        this.ip = ip;
     }
 
     public String getIssuer() {
@@ -87,12 +67,12 @@ public class Punishment {
         this.active = active;
     }
 
-    public String getIp() {
-        return ip;
+    public boolean isAuto() {
+        return auto;
     }
 
-    public void setIp(String ip) {
-        this.ip = ip;
+    public void setAuto(boolean auto) {
+        this.auto = auto;
     }
 
     public boolean isPermanent() {

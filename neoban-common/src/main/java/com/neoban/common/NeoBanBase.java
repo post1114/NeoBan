@@ -7,12 +7,17 @@ import com.neoban.common.listener.RestrictListener;
 import com.neoban.common.model.Punishment;
 import com.neoban.common.model.PunishmentType;
 import com.neoban.common.storage.AppealStore;
+import com.neoban.common.storage.IpBanStore;
 import com.neoban.common.storage.LocationStore;
+import com.neoban.common.storage.PlayerIpStore;
 import com.neoban.common.storage.PunishmentStore;
+import com.neoban.common.storage.StorageFactory;
 import com.neoban.common.manager.AppealManager;
 import com.neoban.common.manager.BanManager;
+import com.neoban.common.manager.IpBanManager;
 import com.neoban.common.manager.MuteManager;
 import com.neoban.common.util.Durations;
+import com.neoban.common.util.Ips;
 import com.neoban.common.util.Text;
 import com.neoban.common.util.YamlIo;
 import org.bukkit.Bukkit;
@@ -42,18 +47,23 @@ import java.util.UUID;
 public abstract class NeoBanBase extends JavaPlugin {
 
     private static final String[] COMMAND_NAMES = {
-            "ban", "tempban", "unban", "mute", "tempmute", "unmute", "kick", "appeal", "neoban"
+            "ban", "tempban", "unban", "mute", "tempmute", "unmute", "kick",
+            "ipban", "iptempban", "ipunban", "appeal", "neoban"
     };
 
     private PlatformAdapter adapter;
     private Settings settings;
+    private StorageFactory.Context storage;
     private PunishmentStore banStore;
     private PunishmentStore muteStore;
     private AppealStore appealStore;
     private LocationStore locationStore;
+    private IpBanStore ipBanStore;
+    private PlayerIpStore playerIpStore;
     private BanManager banManager;
     private MuteManager muteManager;
     private AppealManager appealManager;
+    private IpBanManager ipBanManager;
     private World appealWorld;
     private Location appealSpawn;
     private boolean internalTeleport;
@@ -69,19 +79,25 @@ public abstract class NeoBanBase extends JavaPlugin {
         adapter = createAdapter();
         settings = new Settings(loadConfigYaml());
 
-        File dataDir = getDataFolder();
-        banStore = new PunishmentStore(new File(dataDir, "bans.yml"), PunishmentType.BAN);
-        muteStore = new PunishmentStore(new File(dataDir, "mutes.yml"), PunishmentType.MUTE);
-        appealStore = new AppealStore(new File(dataDir, "appeals.yml"));
-        locationStore = new LocationStore(new File(dataDir, "locations.yml"));
-        banStore.load();
-        muteStore.load();
-        appealStore.load();
-        locationStore.load();
+        try {
+            storage = StorageFactory.create(getDataFolder(), settings, getLogger());
+        } catch (Exception e) {
+            getLogger().severe("Storage initialization failed (storage.type: "
+                    + settings.storageType() + "): " + e.getMessage());
+            throw new IllegalStateException("NeoBan storage init failed", e);
+        }
+        banStore = storage.bans;
+        muteStore = storage.mutes;
+        appealStore = storage.appeals;
+        locationStore = storage.locations;
+        ipBanStore = storage.ipBans;
+        playerIpStore = storage.playerIps;
+        getLogger().info("Storage backend: " + settings.storageType());
 
         banManager = new BanManager(this);
         muteManager = new MuteManager(this);
         appealManager = new AppealManager(this);
+        ipBanManager = new IpBanManager(this);
 
         ensureAppealWorld();
 
@@ -127,22 +143,18 @@ public abstract class NeoBanBase extends JavaPlugin {
             }
         }
         tasks.clear();
-        if (banStore != null) {
-            banStore.save();
-        }
-        if (muteStore != null) {
-            muteStore.save();
-        }
-        if (appealStore != null) {
-            appealStore.save();
-        }
-        if (locationStore != null) {
-            locationStore.save();
+        if (storage != null) {
+            storage.saveAll();
+            storage.close();
         }
     }
 
     public void reloadPlugin() {
+        Settings previous = settings;
         settings = new Settings(loadConfigYaml());
+        if (previous != null && previous.storageType() != settings.storageType()) {
+            getLogger().warning("storage.type changed - restart the server for the new storage backend to take effect.");
+        }
         ensureAppealWorld();
     }
 
@@ -238,6 +250,14 @@ public abstract class NeoBanBase extends JavaPlugin {
         return locationStore;
     }
 
+    public IpBanStore ipBanStore() {
+        return ipBanStore;
+    }
+
+    public PlayerIpStore playerIpStore() {
+        return playerIpStore;
+    }
+
     public BanManager banManager() {
         return banManager;
     }
@@ -248,6 +268,10 @@ public abstract class NeoBanBase extends JavaPlugin {
 
     public AppealManager appealManager() {
         return appealManager;
+    }
+
+    public IpBanManager ipBanManager() {
+        return ipBanManager;
     }
 
     public World appealWorld() {
@@ -376,11 +400,19 @@ public abstract class NeoBanBase extends JavaPlugin {
     // ---------- join / release flows ----------
 
     public void handleJoin(Player player) {
+        String ip = currentIp(player);
+        if (ip != null) {
+            playerIpStore.record(player.getUniqueId(), player.getName(), ip);
+        }
         banStore.migrateToUuid(player.getName(), player.getUniqueId());
         muteStore.migrateToUuid(player.getName(), player.getUniqueId());
 
         Punishment ban = banStore.findActive(player.getUniqueId(), player.getName());
         if (ban != null) {
+            if (ip != null && !ip.equals(ban.getIp())) {
+                banStore.updateIp(ban, ip);
+                ipBanManager.checkThreshold(ip);
+            }
             if (!inAppealWorld(player)) {
                 locationStore.save(player.getUniqueId(), player.getLocation());
                 teleportInternal(player, appealSpawn());
@@ -430,6 +462,10 @@ public abstract class NeoBanBase extends JavaPlugin {
         }
     }
 
+    public String currentIp(Player player) {
+        return player == null ? null : Ips.of(player.getAddress());
+    }
+
     public Player findOnline(UUID uuid, String name) {
         if (uuid != null) {
             Player p = getServer().getPlayer(uuid);
@@ -453,6 +489,10 @@ public abstract class NeoBanBase extends JavaPlugin {
         List<Punishment> expired = new ArrayList<Punishment>();
         expired.addAll(banStore.pollExpired());
         expired.addAll(muteStore.pollExpired());
+        int expiredIpBans = ipBanStore.pollExpired().size();
+        if (expiredIpBans > 0) {
+            getLogger().info("Expired IP bans lifted: " + expiredIpBans);
+        }
         for (Punishment p : expired) {
             Player online = findOnline(p.getUuid(), p.getName());
             if (p.getType() == PunishmentType.BAN) {

@@ -4,11 +4,13 @@ import com.neoban.common.NeoBanBase;
 import com.neoban.common.config.Settings;
 import com.neoban.common.model.Appeal;
 import com.neoban.common.model.AppealStatus;
+import com.neoban.common.model.IpBan;
 import com.neoban.common.model.Punishment;
 import com.neoban.common.model.PunishmentType;
 import com.neoban.common.manager.AppealManager;
 import com.neoban.common.storage.PunishmentStore;
 import com.neoban.common.util.Durations;
+import com.neoban.common.util.Ips;
 import com.neoban.common.util.Text;
 import org.bukkit.Bukkit;
 import org.bukkit.OfflinePlayer;
@@ -86,6 +88,29 @@ public class NeoBanCommand implements CommandExecutor, TabCompleter {
             doLift(sender, args[0], PunishmentType.MUTE);
         } else if ("kick".equals(l)) {
             doKick(sender, args);
+        } else if ("ipban".equals(l)) {
+            if (args.length < 1) {
+                plugin.send(sender, "usage-ipban");
+                return true;
+            }
+            doIpPunish(sender, args[0], Text.join(args, 1), -1L);
+        } else if ("iptempban".equals(l)) {
+            if (args.length < 2) {
+                plugin.send(sender, "usage-iptempban");
+                return true;
+            }
+            long ms = Durations.parse(args[1]);
+            if (ms < 0) {
+                plugin.send(sender, "invalid-duration");
+                return true;
+            }
+            doIpPunish(sender, args[0], Text.join(args, 2), ms);
+        } else if ("ipunban".equals(l)) {
+            if (args.length < 1) {
+                plugin.send(sender, "usage-ipunban");
+                return true;
+            }
+            doIpUnban(sender, args[0]);
         } else if ("appeal".equals(l)) {
             doAppeal(sender, args);
         } else if ("neoban".equals(l)) {
@@ -134,9 +159,16 @@ public class NeoBanCommand implements CommandExecutor, TabCompleter {
         }
 
         String issuer = sender.getName();
-        Punishment p = type == PunishmentType.BAN
-                ? plugin.banManager().ban(t.uuid, t.name, issuer, reason, durationMs)
-                : plugin.muteManager().mute(t.uuid, t.name, issuer, reason, durationMs);
+        Punishment p;
+        if (type == PunishmentType.BAN) {
+            String ip = resolveBanIp(t);
+            p = plugin.banManager().ban(t.uuid, t.name, issuer, reason, durationMs, ip);
+            if (ip != null) {
+                plugin.ipBanManager().checkThreshold(ip);
+            }
+        } else {
+            p = plugin.muteManager().mute(t.uuid, t.name, issuer, reason, durationMs);
+        }
 
         String duration = durationMs <= 0 ? "Permanent" : Durations.format(durationMs);
 
@@ -198,6 +230,91 @@ public class NeoBanCommand implements CommandExecutor, TabCompleter {
         }
         plugin.adapter().kick(target, reason);
         plugin.send(sender, "kick-success", "player", target.getName());
+    }
+
+    // ---------- IP punishment helpers ----------
+
+    private String resolveBanIp(Target t) {
+        if (t.online != null) {
+            return plugin.currentIp(t.online);
+        }
+        String ip = null;
+        if (t.uuid != null) {
+            ip = plugin.playerIpStore().findByUuid(t.uuid);
+        }
+        if (ip == null && t.name != null) {
+            ip = plugin.playerIpStore().findByName(t.name);
+        }
+        return ip;
+    }
+
+    private String resolveIpTarget(CommandSender sender, String rawTarget) {
+        String ip = Ips.normalize(rawTarget);
+        if (ip != null) {
+            return ip;
+        }
+        if (Ips.looksLike(rawTarget)) {
+            plugin.send(sender, "invalid-ip", "ip", rawTarget);
+            return null;
+        }
+        Player online = plugin.findOnline(null, rawTarget);
+        if (online != null) {
+            String onlineIp = plugin.currentIp(online);
+            if (onlineIp != null) {
+                return onlineIp;
+            }
+            plugin.send(sender, "target-not-found", "player", rawTarget);
+            return null;
+        }
+        OfflinePlayer op = Bukkit.getOfflinePlayer(rawTarget);
+        String known = null;
+        if (op.hasPlayedBefore()) {
+            known = plugin.playerIpStore().findByUuid(op.getUniqueId());
+        }
+        if (known == null) {
+            known = plugin.playerIpStore().findByName(rawTarget);
+        }
+        if (known != null) {
+            return known;
+        }
+        plugin.send(sender, "target-not-found", "player", rawTarget);
+        return null;
+    }
+
+    private void doIpPunish(CommandSender sender, String rawTarget, String rawReason, long durationMs) {
+        String ip = resolveIpTarget(sender, rawTarget);
+        if (ip == null) {
+            return;
+        }
+        String reason = rawReason == null || rawReason.trim().isEmpty()
+                ? plugin.formatMessage("reason-default") : Text.color(rawReason.trim());
+        if (plugin.ipBanStore().findActive(ip) != null) {
+            plugin.send(sender, "already-ip-banned");
+            return;
+        }
+        IpBan ban = plugin.ipBanStore().create(ip, sender.getName(), reason, durationMs, false);
+        String duration = durationMs <= 0 ? "Permanent" : Durations.format(durationMs);
+        Player senderPlayer = sender instanceof Player ? (Player) sender : null;
+        int kicked = plugin.ipBanManager().kickPlayersOn(ip, ban, senderPlayer);
+        plugin.send(sender, "ipban-success", "ip", ip, "duration", duration, "reason", reason);
+        plugin.getLogger().info(sender.getName() + " -> IPBAN " + ip + " (" + duration + "): " + reason
+                + (kicked > 0 ? " [kicked " + kicked + " player(s)]" : ""));
+    }
+
+    private void doIpUnban(CommandSender sender, String rawIp) {
+        String ip = Ips.normalize(rawIp);
+        if (ip == null) {
+            plugin.send(sender, "invalid-ip", "ip", rawIp);
+            return;
+        }
+        IpBan ban = plugin.ipBanStore().findActive(ip);
+        if (ban == null) {
+            plugin.send(sender, "ipunban-not-found");
+            return;
+        }
+        plugin.ipBanStore().deactivate(ban);
+        plugin.send(sender, "ipunban-success", "ip", ip);
+        plugin.getLogger().info(sender.getName() + " -> IPUNBAN " + ip);
     }
 
     // ---------- appeal ----------
@@ -401,6 +518,7 @@ public class NeoBanCommand implements CommandExecutor, TabCompleter {
             plugin.send(sender, "info-bans", "count", String.valueOf(plugin.banStore().activeCount()));
             plugin.send(sender, "info-mutes", "count", String.valueOf(plugin.muteStore().activeCount()));
             plugin.send(sender, "info-appeals", "count", String.valueOf(plugin.appealStore().pendingCount()));
+            plugin.send(sender, "info-ipbans", "count", String.valueOf(plugin.ipBanStore().activeCount()));
             plugin.send(sender, "info-world",
                     "world", plugin.appealWorld() != null ? plugin.appealWorld().getName() : "-");
         } else if ("resetappeals".equals(sub)) {
@@ -435,14 +553,17 @@ public class NeoBanCommand implements CommandExecutor, TabCompleter {
         String l = command.getName().toLowerCase(Locale.ROOT);
         if (args.length == 1) {
             if ("ban".equals(l) || "tempban".equals(l) || "unban".equals(l) || "mute".equals(l)
-                    || "tempmute".equals(l) || "unmute".equals(l) || "kick".equals(l)) {
+                    || "tempmute".equals(l) || "unmute".equals(l) || "kick".equals(l)
+                    || "ipban".equals(l) || "iptempban".equals(l)) {
                 match(out, onlineNames(), args[0]);
+            } else if ("ipunban".equals(l)) {
+                match(out, plugin.ipBanStore().activeIps(), args[0]);
             } else if ("appeal".equals(l) && sender.hasPermission("neoban.appeal.admin")) {
                 match(out, java.util.Arrays.asList("view", "accept", "deny", "list"), args[0]);
             } else if ("neoban".equals(l) && sender.hasPermission("neoban.admin")) {
                 match(out, java.util.Arrays.asList("reload", "info", "resetappeals"), args[0]);
             }
-        } else if (args.length == 2 && ("tempban".equals(l) || "tempmute".equals(l))) {
+        } else if (args.length == 2 && ("tempban".equals(l) || "tempmute".equals(l) || "iptempban".equals(l))) {
             match(out, java.util.Arrays.asList("30s", "5m", "1h", "1d", "7d", "30d"), args[1]);
         } else if (args.length == 2 && "neoban".equals(l) && "resetappeals".equalsIgnoreCase(args[0])) {
             match(out, onlineNames(), args[1]);

@@ -1,5 +1,30 @@
 # NeoBan configuration file
 # All messages are customizable; edit the values below to translate the plugin.
+
+storage:
+  # YAML: local files in this plugin folder / MYSQL: shared MySQL or MariaDB database
+  # Switching this value requires a server restart. On the first start with MYSQL and
+  # empty tables, existing YAML files are imported automatically.
+  type: YAML
+  mysql:
+    host: localhost
+    port: 3306
+    database: neoban
+    user: root
+    password: ""
+    table-prefix: neoban_
+    # Extra JDBC connection properties (appended after host:port/database)
+    properties: "useSSL=false&allowPublicKeyRetrieval=true&characterEncoding=utf8&serverTimezone=UTC"
+
+ipban:
+  # Automatically ban an IP when this many banned players share it
+  auto:
+    enabled: true
+    min-banned-players: 7
+    # How long the automatically banned IP stays blocked
+    duration: 2d
+    reason: "Automatic IP ban: too many banned players on this IP"
+
 appeal:
   # Maximum number of appeals allowed per punishment (or per player lifetime, depending on count-scope)
   max-appeals: 5
@@ -85,4 +110,15 @@ messages:
   info-bans: "&7Active bans: &f{count}"
   info-mutes: "&7Active mutes: &f{count}"
   info-appeals: "&7Pending appeals: &f{count}"
+  info-ipbans: "&7Active IP bans: &f{count}"
   info-world: "&7Appeal world: &f{world}"
+  usage-ipban: "&cUsage: /ipban <ip|player> [reason]"
+  usage-iptempban: "&cUsage: /iptempban <ip|player> <duration> [reason]"
+  usage-ipunban: "&cUsage: /ipunban <ip>"
+  invalid-ip: "&cInvalid IP address: &e{ip}"
+  already-ip-banned: "&cThat IP address is already banned."
+  ipban-success: "&aBanned IP &e{ip}&a, duration: &f{duration}&a, reason: &f{reason}"
+  ipban-join: "&cYou are banned from this server (IP ban).&7 Reason: &f{reason}&7 Time left: &f{duration}"
+  ipunban-success: "&aUnbanned IP &e{ip}&a."
+  ipunban-not-found: "&cThat IP address has no active ban."
+  auto-ipban-notify: "&cAuto IP ban: &f{ip} &chas &f{count} &cbanned players, blocked for &f{duration}&c."

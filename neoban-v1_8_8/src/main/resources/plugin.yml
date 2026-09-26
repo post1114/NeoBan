@@ -32,6 +32,18 @@ commands:
     description: Kick a player
     usage: /kick <player> [reason]
     permission: neoban.kick
+  ipban:
+    description: Permanently ban an IP address
+    usage: /ipban <ip|player> [reason]
+    permission: neoban.ipban
+  iptempban:
+    description: Temporarily ban an IP address
+    usage: /iptempban <ip|player> <duration> [reason]
+    permission: neoban.iptempban
+  ipunban:
+    description: Unban an IP address
+    usage: /ipunban <ip>
+    permission: neoban.ipunban
   appeal:
     description: Submit or manage appeals
     usage: /appeal [submit|view|accept|deny|list] ...
@@ -69,4 +81,16 @@ permissions:
     default: op
   neoban.bypass:
     description: Bypass appeal world restrictions
+    default: op
+  neoban.ipban:
+    description: Allows /ipban
+    default: op
+  neoban.iptempban:
+    description: Allows /iptempban
+    default: op
+  neoban.ipunban:
+    description: Allows /ipunban
+    default: op
+  neoban.ipban.bypass:
+    description: Never blocked by IP bans
     default: op

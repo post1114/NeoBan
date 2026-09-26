@@ -17,8 +17,8 @@ public class BanManager {
         return plugin.banStore().findActive(uuid, name);
     }
 
-    public Punishment ban(UUID uuid, String name, String issuer, String reason, long durationMs) {
-        return plugin.banStore().create(uuid, name, issuer, reason, durationMs);
+    public Punishment ban(UUID uuid, String name, String issuer, String reason, long durationMs, String ip) {
+        return plugin.banStore().create(uuid, name, issuer, reason, durationMs, ip);
     }
 
     public boolean unban(UUID uuid, String name) {

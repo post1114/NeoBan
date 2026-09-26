@@ -9,6 +9,8 @@
 ## 功能特性
 
 - 永久 / 临时**封禁**（`/ban`、`/tempban`）与**禁言**（`/mute`、`/tempmute`）
+- **IP 封禁**（`/ipban`、`/iptempban`、`/ipunban`）：被封 IP 在登录时直接拒绝，并显示原因与时长
+- **自动 IP 封禁**：同一 IP 上达到 N 个（默认 7）被封玩家时，自动封禁该 IP 一段时间（默认 `2d`）
 - **踢出**玩家（`/kick`）
 - **申诉系统**：玩家填写理由提交申诉，管理员通过 `/appeal list|view|accept|deny` 审核
 - 被封禁玩家加入后被限制在可配置的**申诉世界**，原位置自动保存、解封后恢复
@@ -19,7 +21,7 @@
 - 具有 `neoban.appeal.admin` 权限的管理员上线时自动收到待处理申诉（离线期间的申诉不会遗漏）
 - 申诉通过/驳回时会通知玩家本人（即使决定时玩家不在线）
 - 时长格式如 `7d`、`1d12h`、`45m`、`30s`，支持组合
-- 纯 YAML 存储（零外部依赖）：`bans.yml`、`mutes.yml`、`appeals.yml`、`locations.yml`
+- 存储后端：**YAML**（默认，零外部依赖）或 **MySQL/MariaDB**；首次成功连接 MySQL 时会自动导入现有 YAML 数据
 - 所有消息均在 `config.yml` 中，可完全自定义（默认英文）
 - UUID 迁移：以玩家名记录的处罚会在玩家首次加入时自动迁移为 UUID
 
@@ -79,6 +81,9 @@ Linux/macOS 请改用 `export JAVA_HOME=...`。务必使用 `clean` 构建。
 | `/tempmute <玩家> <时长> [理由]` | `neoban.tempmute` | 临时禁言 |
 | `/unmute <玩家>` | `neoban.unmute` | 解除禁言 |
 | `/kick <玩家> [理由]` | `neoban.kick` | 踢出玩家 |
+| `/ipban <ip|玩家> [理由]` | `neoban.ipban` | 永久封禁 IP（登录时拒绝） |
+| `/iptempban <ip|玩家> <时长> [理由]` | `neoban.iptempban` | 临时封禁 IP |
+| `/ipunban <ip>` | `neoban.ipunban` | 解除 IP 封禁 |
 | `/appeal` | — | 查看自己的申诉状态 |
 | `/appeal <理由>` | — | 针对当前处罚提交申诉 |
 | `/appeal list` | `neoban.appeal.admin` | 列出待处理申诉 |
@@ -96,6 +101,8 @@ Linux/macOS 请改用 `export JAVA_HOME=...`。务必使用 `clean` 构建。
 | `neoban.ban` / `neoban.tempban` / `neoban.unban` | `op` | 封禁相关命令 |
 | `neoban.mute` / `neoban.tempmute` / `neoban.unmute` | `op` | 禁言相关命令 |
 | `neoban.kick` | `op` | 踢出 |
+| `neoban.ipban` / `neoban.iptempban` / `neoban.ipunban` | `op` | IP 封禁相关命令 |
+| `neoban.ipban.bypass` | `op` | 不会被 IP 封禁（含自动 IP 封禁）踢出，且自动封禁时豁免 |
 | `neoban.appeal.admin` | `op` | 审核申诉 / 接收待处理申诉通知 |
 | `neoban.admin` | `op` | `/neoban` 管理命令 |
 | `neoban.bypass` | `op` | 免受申诉世界限制 |
@@ -110,6 +117,23 @@ Linux/macOS 请改用 `export JAVA_HOME=...`。务必使用 `clean` 构建。
 ## 配置（节选）
 
 ```yaml
+storage:
+  type: YAML                # YAML（默认）| MYSQL
+  mysql:
+    host: localhost
+    port: 3306
+    database: neoban
+    user: root
+    password: ""
+    table-prefix: neoban_
+
+ipban:
+  auto:
+    enabled: true
+    min-banned-players: 7   # 同一 IP 上达到多少个被封玩家后自动封禁该 IP
+    duration: 2d            # 自动 IP 封禁的持续时长
+    reason: "Automatic IP ban: too many banned players on this IP"
+
 appeal:
   max-appeals: 5              # 每次处罚（或终身）允许的申诉次数
   cooldown-minutes: 60        # 两次申诉之间的冷却（分钟）
@@ -127,9 +151,17 @@ messages:
   # ... 所有消息均可在此修改或翻译
 ```
 
+## 存储
+
+`storage.type` 选择存储后端：
+
+- `YAML`（默认）：全部数据保存在 `plugins/NeoBan/` 下的 UTF-8 YAML 文件中。
+- `MYSQL`：数据保存在 MySQL/MariaDB 表中。数据库为空时首次启动会自动导入现有 YAML 文件（仅一次，单事务）。修改 `storage.type` 需要重启服务器——`/neoban reload` 只重载设置与消息。
+- MySQL 驱动已内置在插件中，无需额外 jar。
+
 ## 数据文件
 
-全部数据以 UTF-8 YAML 存储于 `plugins/NeoBan/`：
+使用 YAML 存储时，数据位于 `plugins/NeoBan/` 下的 UTF-8 YAML 文件：
 
 | 文件 | 内容 |
 |---|---|
@@ -138,6 +170,8 @@ messages:
 | `mutes.yml` | 禁言记录 |
 | `appeals.yml` | 申诉与玩家计数器 |
 | `locations.yml` | 被封禁玩家保存的位置 |
+| `ipbans.yml` | IP 封禁记录 |
+| `player-ips.yml` | 每个玩家最近已知的 IP（用于对离线玩家执行 IP 封禁） |
 
 ## 许可证
 

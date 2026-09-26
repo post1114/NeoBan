@@ -81,7 +81,7 @@ public class AppealManager {
 
         int notified = notifyAdmins(a);
         a.setDelivered(notified > 0);
-        plugin.appealStore().save();
+        plugin.appealStore().update(a);
 
         plugin.getLogger().info("Appeal #" + a.getId() + " from " + player.getName()
                 + " (" + target.getType() + " #" + target.getId() + "): " + reason);
@@ -100,7 +100,7 @@ public class AppealManager {
         a.setDecidedBy(admin);
         a.setDecidedAt(System.currentTimeMillis());
         a.setNote(note == null ? "" : note);
-        plugin.appealStore().save();
+        plugin.appealStore().update(a);
 
         if (accept) {
             liftPunishment(a);
@@ -166,11 +166,9 @@ public class AppealManager {
             if (!a.isDelivered()) {
                 sendAppealInfo(admin, a);
                 a.setDelivered(true);
+                plugin.appealStore().update(a);
                 count++;
             }
-        }
-        if (count > 0) {
-            plugin.appealStore().save();
         }
         return count;
     }

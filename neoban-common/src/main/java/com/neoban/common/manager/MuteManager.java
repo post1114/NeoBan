@@ -18,7 +18,7 @@ public class MuteManager {
     }
 
     public Punishment mute(UUID uuid, String name, String issuer, String reason, long durationMs) {
-        return plugin.muteStore().create(uuid, name, issuer, reason, durationMs);
+        return plugin.muteStore().create(uuid, name, issuer, reason, durationMs, null);
     }
 
     public boolean unmute(UUID uuid, String name) {

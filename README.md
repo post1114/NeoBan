@@ -9,6 +9,8 @@ Banned players are sent to a dedicated **appeal world** (a plugin-generated void
 ## Features
 
 - Permanent and temporary **bans** (`/ban`, `/tempban`) and **mutes** (`/mute`, `/tempmute`)
+- **IP bans** (`/ipban`, `/iptempban`, `/ipunban`): blocked IPs are denied at login with the reason and duration
+- **Automatic IP ban**: when N banned players (default 7) share one IP, that IP is blocked automatically for a configurable duration (default `2d`)
 - **Kick** players (`/kick`)
 - **Appeal system**: players submit an appeal with a reason; admins review with `/appeal list|view|accept|deny`
 - Banned players are confined to a configurable **appeal world** on join, with their previous location saved and restored
@@ -19,7 +21,7 @@ Banned players are sent to a dedicated **appeal world** (a plugin-generated void
 - Admins with `neoban.appeal.admin` receive pending appeals automatically when they join (offline admins never miss an appeal)
 - Appeal accept/deny notifies the player, even if they are offline at decision time
 - Durations like `7d`, `1d12h`, `45m`, `30s`, combinations allowed
-- YAML storage (no external dependencies): `bans.yml`, `mutes.yml`, `appeals.yml`, `locations.yml`
+- Storage backends: **YAML** (default, no external dependencies) or **MySQL/MariaDB**; on the first successful MySQL connection existing YAML data is imported automatically
 - All messages live in `config.yml` and are fully customizable (English by default)
 - UUID migration: name-keyed punishments are migrated to UUIDs automatically on first join
 
@@ -79,6 +81,9 @@ Module layout:
 | `/tempmute <player> <duration> [reason]` | `neoban.tempmute` | Temporary mute |
 | `/unmute <player>` | `neoban.unmute` | Lift a mute |
 | `/kick <player> [reason]` | `neoban.kick` | Kick a player |
+| `/ipban <ip|player> [reason]` | `neoban.ipban` | Permanently block an IP (denies login) |
+| `/iptempban <ip|player> <duration> [reason]` | `neoban.iptempban` | Temporarily block an IP |
+| `/ipunban <ip>` | `neoban.ipunban` | Lift an IP ban |
 | `/appeal` | — | Show your appeal status |
 | `/appeal <reason>` | — | Submit an appeal for your active punishment |
 | `/appeal list` | `neoban.appeal.admin` | List pending appeals |
@@ -96,6 +101,8 @@ Module layout:
 | `neoban.ban` / `neoban.tempban` / `neoban.unban` | `op` | Ban commands |
 | `neoban.mute` / `neoban.tempmute` / `neoban.unmute` | `op` | Mute commands |
 | `neoban.kick` | `op` | Kick |
+| `neoban.ipban` / `neoban.iptempban` / `neoban.ipunban` | `op` | IP ban commands |
+| `neoban.ipban.bypass` | `op` | Never kicked by IP bans (incl. automatic ones) and exempt from the auto-IP-ban kick |
 | `neoban.appeal.admin` | `op` | Review appeals / receive pending-appeal notifications |
 | `neoban.admin` | `op` | `/neoban` admin commands |
 | `neoban.bypass` | `op` | Ignore appeal-world restrictions |
@@ -110,6 +117,23 @@ Module layout:
 ## Configuration (excerpt)
 
 ```yaml
+storage:
+  type: YAML                # YAML (default) | MYSQL
+  mysql:
+    host: localhost
+    port: 3306
+    database: neoban
+    user: root
+    password: ""
+    table-prefix: neoban_
+
+ipban:
+  auto:
+    enabled: true
+    min-banned-players: 7   # banned players sharing one IP before it is auto-blocked
+    duration: 2d            # how long the automatic IP ban lasts
+    reason: "Automatic IP ban: too many banned players on this IP"
+
 appeal:
   max-appeals: 5              # max appeals per punishment (or lifetime)
   cooldown-minutes: 60        # cooldown between appeals
@@ -127,9 +151,17 @@ messages:
   # ... every message can be edited or translated here
 ```
 
+## Storage
+
+`storage.type` selects the backend:
+
+- `YAML` (default): all data in UTF-8 YAML files under `plugins/NeoBan/`.
+- `MYSQL`: data in MySQL/MariaDB tables. On first startup with an empty database, existing YAML files are imported automatically (one shot, transactional). Changing `storage.type` requires a server restart — `/neoban reload` reloads settings and messages only.
+- The MySQL driver ships inside the plugin; no extra jars are needed.
+
 ## Data files
 
-All data is stored as UTF-8 YAML in `plugins/NeoBan/`:
+With YAML storage, data lives in UTF-8 YAML files under `plugins/NeoBan/`:
 
 | File | Contents |
 |---|---|
@@ -138,6 +170,8 @@ All data is stored as UTF-8 YAML in `plugins/NeoBan/`:
 | `mutes.yml` | Mute records |
 | `appeals.yml` | Appeals and per-player counters |
 | `locations.yml` | Saved locations of banned players |
+| `ipbans.yml` | IP ban records |
+| `player-ips.yml` | Last known IP per player (used to resolve IP bans for offline players) |
 
 ## License
 
