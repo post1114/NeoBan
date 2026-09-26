@@ -1,0 +1,174 @@
+name: Build, Smoke & Release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'neoban-*/src/**'
+      - '.github/workflows/**'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: neoban-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-smoke-release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 8
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '8'
+          cache: maven
+
+      - name: Build common + legacy jar (JDK 8)
+        run: mvn -B -ntp clean install -pl neoban-common,neoban-v1_8_8
+
+      - name: Set up JDK 25
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '25'
+
+      - name: Build compat check + modern jar (JDK 25)
+        run: mvn -B -ntp clean package -pl neoban-compat-check,neoban-v26_3
+
+      - name: Verify jar contents
+        run: |
+          set -euo pipefail
+          for j in neoban-v1_8_8/target/NeoBan-1.8.8.jar neoban-v26_3/target/NeoBan-26.3.jar; do
+            echo "== $j =="
+            unzip -l "$j" | grep -q 'com/mysql/cj/jdbc/Driver.class'
+            unzip -p "$j" META-INF/services/java.sql.Driver | grep -q 'com.mysql.cj.jdbc.Driver'
+            unzip -p "$j" config.yml | grep -q 'type: YAML'
+            unzip -p "$j" config.yml | grep -q 'min-banned-players: 7'
+            unzip -p "$j" plugin.yml | grep -q 'ipban'
+            unzip -p "$j" plugin.yml | grep -q 'neoban.ipban.bypass'
+          done
+          echo "jar checks OK"
+
+      - name: Download Paper server jars
+        run: |
+          set -euo pipefail
+          L18=$(curl -fsSL 'https://fill.papermc.io/v3/projects/paper/versions/1.8.8/builds/latest' | jq -r '.downloads["server:default"].url')
+          curl -fsSL -o "$RUNNER_TEMP/paper-1.8.8.jar" "$L18"
+          M26=$(curl -fsSL 'https://fill.papermc.io/v3/projects/paper/versions/26.3/builds/latest' | jq -r '.downloads["server:default"].url')
+          curl -fsSL -o "$RUNNER_TEMP/paper-26.3.jar" "$M26"
+          ls -la "$RUNNER_TEMP"/paper-*.jar
+
+      - name: Smoke test legacy (Paper 1.8.8)
+        shell: pwsh
+        run: |
+          & ./.github/scripts/smoke.ps1 `
+            -Java "$env:JAVA_HOME_8_X64/bin/java" `
+            -WorkDir "$env:RUNNER_TEMP/neoban-smoke-legacy" `
+            -ServerJar "$env:RUNNER_TEMP/paper-1.8.8.jar" `
+            -PluginJar "$(Get-Location)/neoban-v1_8_8/target/NeoBan-1.8.8.jar" `
+            -OutLog "$env:RUNNER_TEMP/smoke-legacy.log" `
+            -Commands @(
+              'neoban info',
+              'ban CIBanned ci test',
+              'mute CIMuted ci test',
+              'appeal list',
+              'ipban 203.0.113.50 ci ip',
+              'ipban 203.0.113.50',
+              'iptempban 203.0.113.51 1h ci temp',
+              'ipunban 203.0.113.51',
+              'ipban 999.1.2.3',
+              'unban CIBanned',
+              'ban Alt1 alt account',
+              'ban Alt2 alt account',
+              'ban Alt3 alt account',
+              'ban Alt4 alt account',
+              'ban Alt5 alt account',
+              'ban Alt6 alt account',
+              'ban Alt7 alt account',
+              'neoban info'
+            ) `
+            -Assert @(
+              '\[NeoBan\] NeoBan enabled',
+              'Storage backend: YAML',
+              'Banned CIBanned',
+              'Muted CIMuted',
+              'Banned IP 203\.0\.113\.50',
+              'That IP address is already banned',
+              'Invalid IP address: 999\.1\.2\.3',
+              'Unbanned IP 203\.0\.113\.51',
+              'Unbanned CIBanned',
+              'Auto IP ban: 198\.51\.100\.77 has 7 banned players',
+              'Active bans: 7',
+              'Active IP bans: 2'
+            )
+          $rc = $LASTEXITCODE
+          Get-Content "$env:RUNNER_TEMP/smoke-legacy.log" | Select-String -Pattern '\[NeoBan\]' | ForEach-Object { $_.Line }
+          if ($rc -ne 0) { exit 1 }
+
+      - name: Smoke test modern (Paper 26.3)
+        shell: pwsh
+        run: |
+          & ./.github/scripts/smoke.ps1 `
+            -Java "$env:JAVA_HOME_25_X64/bin/java" `
+            -WorkDir "$env:RUNNER_TEMP/neoban-smoke-modern" `
+            -ServerJar "$env:RUNNER_TEMP/paper-26.3.jar" `
+            -PluginJar "$(Get-Location)/neoban-v26_3/target/NeoBan-26.3.jar" `
+            -OutLog "$env:RUNNER_TEMP/smoke-modern.log" `
+            -Commands @(
+              'neoban reload',
+              'neoban info',
+              'ban ModCI ci test',
+              'tempban ModTempCI 1h ci temp',
+              'mute ModMuteCI ci test',
+              'unmute ModMuteCI',
+              'unban ModTempCI',
+              'ipban 203.0.113.60 ci ip',
+              'ipban 203.0.113.60',
+              'iptempban 203.0.113.61 1h ci temp',
+              'ipunban 203.0.113.61',
+              'appeal list',
+              'neoban info'
+            ) `
+            -Assert @(
+              '\[NeoBan\] NeoBan enabled',
+              'Storage backend: YAML',
+              'Banned ModCI',
+              'Muted ModMuteCI',
+              'Banned IP 203\.0\.113\.60',
+              'That IP address is already banned',
+              'Unbanned IP 203\.0\.113\.61',
+              'Active bans: 1'
+            )
+          $rc = $LASTEXITCODE
+          Get-Content "$env:RUNNER_TEMP/smoke-modern.log" | Select-String -Pattern '\[NeoBan\]' | ForEach-Object { $_.Line }
+          if ($rc -ne 0) { exit 1 }
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: neoban-jars
+          path: |
+            neoban-v1_8_8/target/NeoBan-1.8.8.jar
+            neoban-v26_3/target/NeoBan-26.3.jar
+
+      - name: Publish GitHub Release
+        if: github.event_name == 'push'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release delete latest --yes --cleanup-tag 2>/dev/null || true
+          gh release create latest \
+            neoban-v1_8_8/target/NeoBan-1.8.8.jar \
+            neoban-v26_3/target/NeoBan-26.3.jar \
+            --title "Latest Build ${GITHUB_SHA:0:7}" \
+            --generate-notes \
+            --latest
