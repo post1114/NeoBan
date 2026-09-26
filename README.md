@@ -45,9 +45,9 @@ The build has two passes because the legacy jar must be compiled against Spigot 
 Requirements: Maven 3.9+, JDK 8, JDK 25.
 
 ```powershell
-# Pass 1 — neoban-common + legacy jar  (JDK 8)
+# Pass 1 — parent + neoban-common + legacy jar  (JDK 8)
 $env:JAVA_HOME = 'C:\path\to\jdk8'
-mvn clean install -pl neoban-common,neoban-v1_8_8
+mvn clean install -pl .,neoban-common,neoban-v1_8_8
 
 # Pass 2 — compat check + modern jar  (JDK 25)
 $env:JAVA_HOME = 'C:\path\to\jdk25'

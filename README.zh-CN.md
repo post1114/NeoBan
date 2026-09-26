@@ -45,9 +45,9 @@
 环境要求：Maven 3.9+、JDK 8、JDK 25。
 
 ```powershell
-# 第一遍 —— neoban-common + 旧版 jar  （JDK 8）
+# 第一遍 —— 父pom + neoban-common + 旧版 jar  （JDK 8）
 $env:JAVA_HOME = 'C:\path\to\jdk8'
-mvn clean install -pl neoban-common,neoban-v1_8_8
+mvn clean install -pl .,neoban-common,neoban-v1_8_8
 
 # 第二遍 —— 兼容性检查 + 现代版 jar  （JDK 25）
 $env:JAVA_HOME = 'C:\path\to\jdk25'
